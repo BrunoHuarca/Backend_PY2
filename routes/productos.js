@@ -67,7 +67,7 @@ router.get('/categoria/:Categoria_ID', (req, res) => {
 router.post('/', (req, res) => {
   const { Nombre, Descripcion, Precio, Imagen_Url, Categoria_ID } = req.body;
 // Verificar que los campos no sean nulos
-if (categoriaId == null || categoriaId <= 0) {
+if (Categoria_ID == null || Categoria_ID <= 0) {
   print("Error: Categoria_ID es inválido");
   return;
 }

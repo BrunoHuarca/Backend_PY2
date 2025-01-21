@@ -2,91 +2,113 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 
-// Agregar un producto al carrito
+// Agregar productos al carrito
+// Agregar productos al carrito
 router.post('/', (req, res) => {
-  const { Usuario_ID, Producto_ID, Cantidad } = req.body;
+  const { Usuario_ID, Productos, Total } = req.body;
 
-  // Verificar que los campos necesarios no sean nulos ni vacíos
-  if (!Usuario_ID || !Producto_ID || !Cantidad) {
-    return res.status(400).send('Faltan datos en la solicitud.');
+  // Validar que los datos requeridos existan
+  if (!Usuario_ID || !Productos || !Total) {
+    return res.status(400).json({ error: 'Faltan datos en la solicitud.' });
   }
 
-  // Verificar que la cantidad sea un número positivo
-  if (isNaN(Cantidad) || Cantidad <= 0) {
-    return res.status(400).send('La cantidad debe ser un número positivo.');
+  // Validar que los productos sean correctos
+  if (!Array.isArray(Productos) || Productos.some(p => !p.producto_id || !p.cantidad || p.cantidad <= 0)) {
+    return res.status(400).json({ error: 'Los productos deben tener un ID válido y una cantidad positiva.' });
   }
 
-  // Consultar si ya existe un carrito para este usuario
-  const queryCarritoExistente = `SELECT * FROM Carrito WHERE Usuario_ID = ?`;
-  db.query(queryCarritoExistente, [Usuario_ID], (err, results) => {
+  // Validar que el usuario exista
+  const queryUsuario = 'SELECT Usuario_ID FROM Usuarios WHERE Usuario_ID = ?';
+  db.query(queryUsuario, [Usuario_ID], (err, results) => {
     if (err) {
-      console.error('Error al verificar el carrito:', err);
-      return res.status(500).send('Error al verificar el carrito');
+      console.error('Error al verificar Usuario_ID:', err);
+      return res.status(500).json({ error: 'Error al verificar el usuario.' });
+    }
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'El usuario no existe.' });
     }
 
-    let carrito;
-    if (results.length > 0) {
-      // Si ya existe un carrito, obtenemos los productos actuales y los actualizamos
-      carrito = results[0];
-      let productos = JSON.parse(carrito.Productos);
-      const productoExistente = productos.find(p => p.producto_id === Producto_ID);
-
-      if (productoExistente) {
-        // Si el producto ya está en el carrito, actualizamos la cantidad
-        productoExistente.cantidad += Cantidad;
-      } else {
-        // Si el producto no está en el carrito, lo agregamos
-        productos.push({ producto_id: Producto_ID, cantidad: Cantidad });
+    // Consultar si ya existe un carrito para este usuario
+    const queryCarritoExistente = `SELECT * FROM Carrito WHERE Usuario_ID = ?`;
+    db.query(queryCarritoExistente, [Usuario_ID], (err, results) => {
+      if (err) {
+        console.error('Error al verificar el carrito:', err);
+        return res.status(500).send('Error al verificar el carrito');
       }
 
-      // Calcular el total actualizado del carrito
-      const queryProductos = 'SELECT Precio FROM Productos WHERE Producto_ID = ?';
-      db.query(queryProductos, [Producto_ID], (err, productoResult) => {
-        if (err) {
-          console.error('Error al obtener el precio del producto:', err);
-          return res.status(500).send('Error al obtener el precio');
-        }
+      let carrito;
+      if (results.length > 0) {
+        // Si ya existe un carrito
+        carrito = results[0];
+        let productos = JSON.parse(carrito.Productos);
 
-        const precio = productoResult[0].Precio;
-        const total = productos.reduce((acc, p) => acc + (p.cantidad * precio), 0);
+        // Actualizar o agregar los productos al carrito
+        Productos.forEach(p => {
+          const productoExistente = productos.find(item => item.producto_id === p.producto_id);
+          if (productoExistente) {
+            productoExistente.cantidad += p.cantidad;
+          } else {
+            productos.push(p);
+          }
+        });
 
-        // Actualizar el carrito con los nuevos productos y el total
-        const queryActualizarCarrito = `UPDATE Carrito SET Productos = ?, Total = ? WHERE Carrito_ID = ?`;
-        db.query(queryActualizarCarrito, [JSON.stringify(productos), total, carrito.Carrito_ID], (err) => {
+        // Calcular el total actualizado
+        const queryProductos = 'SELECT Producto_ID, Precio FROM Productos WHERE Producto_ID IN (?)';
+        db.query(queryProductos, [Productos.map(p => p.producto_id)], (err, productoResults) => {
           if (err) {
-            console.error('Error al actualizar el carrito:', err);
-            return res.status(500).send('Error al actualizar el carrito');
+            console.error('Error al obtener los precios de los productos:', err);
+            return res.status(500).send('Error al obtener los precios');
           }
 
-          res.status(200).json({ mensaje: 'Producto agregado al carrito', total });
+          let totalCalculado = 0;
+          productos.forEach(p => {
+            const productoPrecio = productoResults.find(pr => pr.Producto_ID === p.producto_id);
+            if (productoPrecio) {
+              totalCalculado += p.cantidad * productoPrecio.Precio;
+            }
+          });
+
+          // Actualizar el carrito
+          const queryActualizarCarrito = `UPDATE Carrito SET Productos = ?, Total = ? WHERE Carrito_ID = ?`;
+          db.query(queryActualizarCarrito, [JSON.stringify(productos), totalCalculado, carrito.Carrito_ID], (err) => {
+            if (err) {
+              console.error('Error al actualizar el carrito:', err);
+              return res.status(500).send('Error al actualizar el carrito');
+            }
+            res.status(200).json({ mensaje: 'Producto(s) agregado(s) al carrito', total: totalCalculado });
+          });
         });
-      });
-    } else {
-      // Si no existe un carrito, creamos uno nuevo
-      const productos = [{ producto_id: Producto_ID, cantidad: Cantidad }];
-      const queryPrecio = 'SELECT Precio FROM Productos WHERE Producto_ID = ?';
-      db.query(queryPrecio, [Producto_ID], (err, productoResult) => {
-        if (err) {
-          console.error('Error al obtener el precio del producto:', err);
-          return res.status(500).send('Error al obtener el precio');
-        }
-
-        const precio = productoResult[0].Precio;
-        const total = Cantidad * precio;
-
-        const queryNuevoCarrito = `INSERT INTO Carrito (Usuario_ID, Productos, Total) VALUES (?, ?, ?)`;
-        db.query(queryNuevoCarrito, [Usuario_ID, JSON.stringify(productos), total], (err, result) => {
+      } else {
+        // Si no existe un carrito, creamos uno nuevo
+        const queryPrecio = 'SELECT Producto_ID, Precio FROM Productos WHERE Producto_ID IN (?)';
+        db.query(queryPrecio, [Productos.map(p => p.producto_id)], (err, productoResults) => {
           if (err) {
-            console.error('Error al crear el carrito:', err);
-            return res.status(500).send('Error al crear el carrito');
+            console.error('Error al obtener los precios de los productos:', err);
+            return res.status(500).send('Error al obtener los precios');
           }
 
-          res.status(201).json({ mensaje: 'Carrito creado y producto agregado', total });
+          let totalCalculado = 0;
+          Productos.forEach(p => {
+            const productoPrecio = productoResults.find(pr => pr.Producto_ID === p.producto_id);
+            if (productoPrecio) {
+              totalCalculado += p.cantidad * productoPrecio.Precio;
+            }
+          });
+
+          const queryNuevoCarrito = `INSERT INTO Carrito (Usuario_ID, Productos, Total) VALUES (?, ?, ?)`;
+          db.query(queryNuevoCarrito, [Usuario_ID, JSON.stringify(Productos), totalCalculado], (err) => {
+            if (err) {
+              console.error('Error al crear el carrito:', err);
+              return res.status(500).send('Error al crear el carrito');
+            }
+            res.status(201).json({ mensaje: 'Carrito creado y producto(s) agregado(s)', total: totalCalculado });
+          });
         });
-      });
-    }
+      }
+    });
   });
 });
+
 
 // Obtener el carrito de un usuario
 router.get('/:Usuario_ID', (req, res) => {
