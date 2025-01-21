@@ -108,7 +108,7 @@ router.get('/', (req, res) => {
   // Ejemplo: req.user contiene los datos del usuario autenticado
   const esAdmin = req.user && req.user.rol === 'admin';  // Suponiendo que req.user contiene los datos del usuario autenticado
 
-  if (!esAdmin) {
+  if (esAdmin) {
     return res.status(403).send('Acceso denegado. Solo los administradores pueden ver todos los pedidos.');
   }
 

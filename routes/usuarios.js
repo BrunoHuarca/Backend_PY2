@@ -6,7 +6,7 @@ const db = require('../config/db');
 router.get('/:id', (req, res) => {
   const { id } = req.params;
 
-  const query = `SELECT Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente 
+  const query = `SELECT Direccion, Ubicacion, Numero 
                  FROM Usuarios WHERE Usuario_ID = ?`;
 
   db.query(query, [id], (err, results) => {

@@ -35,7 +35,13 @@ io.on('connection', (socket) => {
 app.use(cors());
 app.use(bodyParser.json());
 
-// Rutas
+// Prefijo común para todas las rutas: "/api"
+app.use('/api', (req, res, next) => {
+  console.log(`Nueva solicitud para la API: ${req.method} ${req.url}`);
+  next(); // Continuar con las rutas definidas
+});
+
+// Rutas (ya están bajo "/api")
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/productos', productosRoutes);
 app.use('/api/pedidos', pedidosRoutes);
