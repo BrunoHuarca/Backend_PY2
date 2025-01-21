@@ -48,7 +48,7 @@ app.use('/api/productos', productosRoutes);
 app.use('/api/pedidos', pedidosRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/carrito', carritoRouter);
-app.use('/api/categrias', categoriasRouter);
+app.use('/api/categorias', categoriasRouter);
 
 // Iniciar servidor
 server.listen(PORT, () => {
