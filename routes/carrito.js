@@ -5,10 +5,10 @@ const db = require('../config/db');
 // Agregar productos al carrito
 // Agregar productos al carrito
 router.post('/', (req, res) => {
-  const { Usuario_ID, Productos, Total } = req.body;
+  const { Usuario_ID, Productos } = req.body;
 
   // Validar que los datos requeridos existan
-  if (!Usuario_ID || !Productos || !Total) {
+  if (!Usuario_ID || !Productos) {
     return res.status(400).json({ error: 'Faltan datos en la solicitud.' });
   }
 
@@ -54,7 +54,7 @@ router.post('/', (req, res) => {
 
         // Calcular el total actualizado
         const queryProductos = 'SELECT Producto_ID, Precio FROM Productos WHERE Producto_ID IN (?)';
-        db.query(queryProductos, [Productos.map(p => p.producto_id)], (err, productoResults) => {
+        db.query(queryProductos, [productos.map(p => p.producto_id)], (err, productoResults) => {
           if (err) {
             console.error('Error al obtener los precios de los productos:', err);
             return res.status(500).send('Error al obtener los precios');
@@ -160,30 +160,39 @@ router.put('/:Usuario_ID/producto/:Producto_ID', (req, res) => {
     // Actualizar la cantidad del producto
     productoExistente.cantidad = Cantidad;
 
-    // Calcular el nuevo total del carrito
-    const queryPrecio = 'SELECT Precio FROM Productos WHERE Producto_ID = ?';
-    db.query(queryPrecio, [Producto_ID], (err, productoResult) => {
-      if (err) {
-        console.error('Error al obtener el precio del producto:', err);
-        return res.status(500).send('Error al obtener el precio');
-      }
+    // Calcular el nuevo total del carrito basado en todos los productos
+    let total = 0;
+    const calcularTotal = async () => {
+      for (let p of productos) {
+        const queryPrecio = 'SELECT Precio FROM Productos WHERE Producto_ID = ?';
+        const [productoResult] = await db.promise().query(queryPrecio, [p.producto_id]);
 
-      const precio = productoResult[0].Precio;
-      const total = productos.reduce((acc, p) => acc + (p.cantidad * precio), 0);
-
-      // Actualizar el carrito con los nuevos productos y el total
-      const queryActualizarCarrito = `UPDATE Carrito SET Productos = ?, Total = ? WHERE Carrito_ID = ?`;
-      db.query(queryActualizarCarrito, [JSON.stringify(productos), total, carrito.Carrito_ID], (err) => {
-        if (err) {
-          console.error('Error al actualizar el carrito:', err);
-          return res.status(500).send('Error al actualizar el carrito');
+        if (productoResult.length > 0) {
+          total += p.cantidad * productoResult[0].Precio;
         }
+      }
+    };
 
-        res.status(200).json({ mensaje: 'Cantidad del producto actualizada', total });
+    calcularTotal()
+      .then(() => {
+        // Actualizar el carrito con los nuevos productos y el total
+        const queryActualizarCarrito = `UPDATE Carrito SET Productos = ?, Total = ? WHERE Carrito_ID = ?`;
+        db.query(queryActualizarCarrito, [JSON.stringify(productos), total, carrito.Carrito_ID], (err) => {
+          if (err) {
+            console.error('Error al actualizar el carrito:', err);
+            return res.status(500).send('Error al actualizar el carrito');
+          }
+
+          res.status(200).json({ mensaje: 'Cantidad del producto actualizada', total });
+        });
+      })
+      .catch(error => {
+        console.error('Error al calcular el total del carrito:', error);
+        res.status(500).send('Error al calcular el total del carrito');
       });
-    });
   });
 });
+
 
 // Eliminar un producto del carrito
 router.delete('/:Usuario_ID/producto/:Producto_ID', (req, res) => {
@@ -211,29 +220,44 @@ router.delete('/:Usuario_ID/producto/:Producto_ID', (req, res) => {
     // Eliminar el producto del carrito
     productos.splice(index, 1);
 
-    // Calcular el nuevo total del carrito
-    const queryPrecio = 'SELECT Precio FROM Productos WHERE Producto_ID = ?';
-    db.query(queryPrecio, [Producto_ID], (err, productoResult) => {
-      if (err) {
-        console.error('Error al obtener el precio del producto:', err);
-        return res.status(500).send('Error al obtener el precio');
-      }
-
-      const precio = productoResult[0].Precio;
-      const total = productos.reduce((acc, p) => acc + (p.cantidad * precio), 0);
-
-      // Actualizar el carrito con los nuevos productos y el total
-      const queryActualizarCarrito = `UPDATE Carrito SET Productos = ?, Total = ? WHERE Carrito_ID = ?`;
-      db.query(queryActualizarCarrito, [JSON.stringify(productos), total, carrito.Carrito_ID], (err) => {
+    if (productos.length === 0) {
+      // Si no quedan productos, reinicia el carrito
+      const queryVaciarCarrito = `UPDATE Carrito SET Productos = '[]', Total = 0 WHERE Carrito_ID = ?`;
+      db.query(queryVaciarCarrito, [carrito.Carrito_ID], (err) => {
         if (err) {
-          console.error('Error al actualizar el carrito:', err);
-          return res.status(500).send('Error al actualizar el carrito');
+          console.error('Error al vaciar el carrito:', err);
+          return res.status(500).send('Error al vaciar el carrito');
+        }
+        res.status(200).json({ mensaje: 'Producto eliminado del carrito. Carrito vacío.', total: 0 });
+      });
+    } else {
+      // Calcular el nuevo total con los productos restantes
+      const queryProductos = 'SELECT Producto_ID, Precio FROM Productos WHERE Producto_ID IN (?)';
+      db.query(queryProductos, [productos.map(p => p.producto_id)], (err, productoResults) => {
+        if (err) {
+          console.error('Error al obtener los precios de los productos:', err);
+          return res.status(500).send('Error al obtener los precios');
         }
 
-        res.status(200).json({ mensaje: 'Producto eliminado del carrito', total });
+        const total = productos.reduce((acc, p) => {
+          const productoPrecio = productoResults.find(pr => pr.Producto_ID === p.producto_id);
+          return acc + (productoPrecio ? p.cantidad * productoPrecio.Precio : 0);
+        }, 0);
+
+        // Actualizar el carrito con los productos restantes y el nuevo total
+        const queryActualizarCarrito = `UPDATE Carrito SET Productos = ?, Total = ? WHERE Carrito_ID = ?`;
+        db.query(queryActualizarCarrito, [JSON.stringify(productos), total, carrito.Carrito_ID], (err) => {
+          if (err) {
+            console.error('Error al actualizar el carrito:', err);
+            return res.status(500).send('Error al actualizar el carrito');
+          }
+
+          res.status(200).json({ mensaje: 'Producto eliminado del carrito', total });
+        });
       });
-    });
+    }
   });
 });
+
 
 module.exports = router;

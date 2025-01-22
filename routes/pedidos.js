@@ -6,26 +6,21 @@ const db = require('../config/db');
 router.post('/', (req, res) => {
   const { Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega } = req.body;
 
-  // Verificar que los campos necesarios no sean nulos ni vacíos
+  // Validaciones de entrada (se mantienen igual)
   if (!Usuario_ID || !Productos || !Total || !Direccion_Entrega || !Ubicacion_Entrega || !Telefono_Cliente) {
     return res.status(400).send('Faltan datos en la solicitud.');
   }
 
-  // Asegurarse de que Productos sea un array de objetos con "producto_id" y "cantidad"
   if (!Array.isArray(Productos) || Productos.some(p => typeof p.producto_id !== 'number' || typeof p.cantidad !== 'number')) {
     return res.status(400).send('El campo Productos debe ser un array de objetos con "producto_id" y "cantidad".');
   }
 
-  // Asegurarse de que el Total sea un número válido
   const total = parseFloat(Total);
   if (isNaN(total) || total <= 0) {
     return res.status(400).send('El total debe ser un número válido y mayor que 0.');
   }
 
-  // Generar un código único de pedido
   const codigoPedido = `PED-${Date.now()}`;
-
-  // Convertir el array de productos a JSON para guardarlo en la base de datos
   const productosJSON = JSON.stringify(Productos);
 
   const queryPedido = `
@@ -37,10 +32,10 @@ router.post('/', (req, res) => {
     [
       codigoPedido,
       Usuario_ID,
-      productosJSON,  // Guardar el array de productos con producto_id y cantidad como un JSON string
+      productosJSON,
       total,
       Direccion_Entrega,
-      JSON.stringify(Ubicacion_Entrega),  // Almacenar la dirección de entrega como JSON string
+      JSON.stringify(Ubicacion_Entrega),
       Telefono_Cliente,
       Referencia_Entrega
     ],
@@ -52,34 +47,46 @@ router.post('/', (req, res) => {
 
       const pedidoId = result.insertId;
 
-      // Guardar notificación
-      const queryNotificacion = `
-        INSERT INTO Notificaciones (Pedido_ID, Mensaje) 
-        VALUES (?, ?)`;
+      // Eliminar el carrito del usuario
+      const queryEliminarCarrito = `DELETE FROM Carrito WHERE Usuario_ID = ?`;
 
-      const mensaje = `Nuevo pedido creado con código ${codigoPedido}`;
-
-      db.query(queryNotificacion, [pedidoId, mensaje], (err) => {
+      db.query(queryEliminarCarrito, [Usuario_ID], (err) => {
         if (err) {
-          console.error('Error al guardar la notificación:', err);
-          return res.status(500).send('Pedido creado, pero hubo un error al guardar la notificación');
+          console.error('Error al eliminar el carrito:', err);
+          return res.status(500).send('Pedido creado, pero hubo un error al eliminar el carrito');
         }
 
-        // Enviar respuesta con éxito
-        res.status(201).json({
-          mensaje: 'Pedido creado con éxito',
-          codigoPedido,
-          pedidoId,
+        // Guardar notificación
+        const queryNotificacion = `
+          INSERT INTO Notificaciones (Pedido_ID, Mensaje) 
+          VALUES (?, ?)`;
+
+        const mensaje = `Nuevo pedido creado con código ${codigoPedido}`;
+
+        db.query(queryNotificacion, [pedidoId, mensaje], (err) => {
+          if (err) {
+            console.error('Error al guardar la notificación:', err);
+            return res.status(500).send('Pedido creado, pero hubo un error al guardar la notificación');
+          }
+
+          // Enviar respuesta con éxito
+          res.status(201).json({
+            mensaje: 'Pedido creado con éxito',
+            codigoPedido,
+            pedidoId,
+          });
+
+          // Emitir notificación en tiempo real si se está usando WebSocket o SSE
+          if (global.io) {
+            global.io.emit('nueva-notificacion', { mensaje });
+          }
         });
-
-        // Emitir notificación en tiempo real si se está usando WebSocket o SSE
-        if (global.io) {
-          global.io.emit('nueva-notificacion', { mensaje });
-        }
       });
     }
   );
 });
+
+
 
 // Obtener pedidos por usuario (solo para clientes)
 router.get('/usuario/:Usuario_ID', (req, res) => {
