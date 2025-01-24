@@ -4,7 +4,7 @@ const db = require('../config/db');
 
 // Crear un pedido
 router.post('/', (req, res) => {
-  const { Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega } = req.body;
+  const { Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega, Tipo_Pago, Efectivo } = req.body;
 
   // Validaciones de entrada (se mantienen igual)
   if (!Usuario_ID || !Productos || !Total || !Direccion_Entrega || !Ubicacion_Entrega || !Telefono_Cliente) {
@@ -24,8 +24,8 @@ router.post('/', (req, res) => {
   const productosJSON = JSON.stringify(Productos);
 
   const queryPedido = `
-    INSERT INTO Pedidos (Codigo_Pedido, Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    INSERT INTO Pedidos (Codigo_Pedido, Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega, Tipo_Pago, Efectivo) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
   db.query(
     queryPedido,
@@ -37,7 +37,9 @@ router.post('/', (req, res) => {
       Direccion_Entrega,
       JSON.stringify(Ubicacion_Entrega),
       Telefono_Cliente,
-      Referencia_Entrega
+      Referencia_Entrega,
+      Tipo_Pago,
+      Efectivo
     ],
     (err, result) => {
       if (err) {

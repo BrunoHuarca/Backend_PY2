@@ -40,8 +40,9 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { Usuario_ID: usuario.Usuario_ID, Rol: usuario.Rol },
       process.env.JWT_SECRET_KEY || 'default_secret',
-      { expiresIn: '1h' }
     );
+
+
 
     res.json({ mensaje: 'Login exitoso', token });
 
