@@ -12,6 +12,7 @@ const pedidosRoutes = require('./routes/pedidos');
 const authRoutes = require('./routes/auth'); 
 const carritoRouter = require('./routes/carrito');
 const categoriasRouter = require('./routes/categorias');
+const vendidosRouter = require('./routes/vendidos');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,6 +50,7 @@ app.use('/api/pedidos', pedidosRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/carrito', carritoRouter);
 app.use('/api/categorias', categoriasRouter);
+app.use('/api/vendidos', vendidosRouter);
 
 // Iniciar servidor
 server.listen(PORT, () => {

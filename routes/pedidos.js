@@ -4,7 +4,7 @@ const db = require('../config/db');
 
 // Crear un pedido
 router.post('/', (req, res) => {
-  const { Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega, Tipo_Pago, Efectivo } = req.body;
+  const { Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega, Tipo_Pago, Efectivo, Delivery } = req.body;
 
   // Validaciones de entrada (se mantienen igual)
   if (!Usuario_ID || !Productos || !Total || !Direccion_Entrega || !Ubicacion_Entrega || !Telefono_Cliente) {
@@ -20,12 +20,17 @@ router.post('/', (req, res) => {
     return res.status(400).send('El total debe ser un número válido y mayor que 0.');
   }
 
-  const codigoPedido = `PED-${Date.now()}`;
+    const fecha = new Date();
+    const dia = fecha.getDate(); // Obtiene el día del mes (28 en tu ejemplo)
+    const numeroAleatorio = Math.floor(Math.random() * 90) + 10; // Genera un número aleatorio de 2 cifras (10 a 99)
+
+
+  const codigoPedido = `PED-${dia}${numeroAleatorio}`;
   const productosJSON = JSON.stringify(Productos);
 
   const queryPedido = `
-    INSERT INTO Pedidos (Codigo_Pedido, Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega, Tipo_Pago, Efectivo) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    INSERT INTO Pedidos (Codigo_Pedido, Usuario_ID, Productos, Total, Direccion_Entrega, Ubicacion_Entrega, Telefono_Cliente, Referencia_Entrega, Tipo_Pago, Efectivo, Delivery) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
   db.query(
     queryPedido,
@@ -39,7 +44,8 @@ router.post('/', (req, res) => {
       Telefono_Cliente,
       Referencia_Entrega,
       Tipo_Pago,
-      Efectivo
+      Efectivo,
+      Delivery
     ],
     (err, result) => {
       if (err) {
@@ -260,5 +266,45 @@ router.put('/:Pedido_ID/estado', (req, res) => {
     });
   });
 });
+
+// Eliminar un pedido
+router.delete('/:pedidoId', (req, res) => {
+  const { pedidoId } = req.params;
+
+  // Verificar si el `pedidoId` fue proporcionado
+  if (!pedidoId) {
+    return res.status(400).send('El ID del pedido es obligatorio');
+  }
+
+  // Consulta SQL para eliminar el pedido
+  const queryEliminarPedido = `DELETE FROM Pedidos WHERE Pedido_ID = ?`;
+
+  db.query(queryEliminarPedido, [pedidoId], (err, result) => {
+    if (err) {
+      console.error('Error al eliminar el pedido:', err);
+      return res.status(500).send('Error al eliminar el pedido');
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).send('El pedido no fue encontrado');
+    }
+
+    // Opcional: Eliminar notificaciones asociadas al pedido (si aplica)
+    const queryEliminarNotificaciones = `DELETE FROM Notificaciones WHERE Pedido_ID = ?`;
+    db.query(queryEliminarNotificaciones, [pedidoId], (err) => {
+      if (err) {
+        console.error('Error al eliminar las notificaciones del pedido:', err);
+        return res
+          .status(500)
+          .send('Pedido eliminado, pero hubo un error al eliminar las notificaciones');
+      }
+
+      // Respuesta exitosa
+      res.status(200).json({ mensaje: 'Pedido eliminado con éxito', pedidoId });
+    });
+  });
+});
+
+
 
 module.exports = router;

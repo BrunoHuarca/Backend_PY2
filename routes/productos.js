@@ -91,4 +91,70 @@ if (Categoria_ID == null || Categoria_ID <= 0) {
   });
 });
 
+
+// Editar producto
+router.put('/:productoId', (req, res) => {
+  const productoId = req.params.productoId;
+  const { Nombre, Descripcion, Precio, Imagen_Url, Categoria_ID, Disponible } = req.body;
+
+  if (!Nombre || !Descripcion || !Precio || !Categoria_ID) {
+    return res.status(400).json({ message: 'Todos los campos son obligatorios' });
+  }
+
+  const query = `
+    UPDATE Productos 
+    SET Nombre = ?, Descripcion = ?, Precio = ?, Imagen_Url = ?, Categoria_ID = ?, Disponible = ?
+    WHERE Producto_ID = ?
+  `;
+
+  db.query(
+    query,
+    [Nombre, Descripcion, Precio, Imagen_Url, Categoria_ID, Disponible, productoId],
+    (err, result) => {
+      if (err) {
+        console.error('Error al actualizar el producto:', err);
+        return res.status(500).json({ message: 'Error al actualizar el producto' });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Producto no encontrado' });
+      }
+
+      // Devolver un JSON con los datos actualizados (opcional)
+      res.status(200).json({ 
+        message: 'Producto actualizado con éxito',
+        productoActualizado: {
+          Producto_ID: productoId,
+          Nombre,
+          Descripcion,
+          Precio,
+          Imagen_Url,
+          Disponible,
+          Categoria_ID
+
+        }
+      });
+    }
+  );
+});
+
+
+// Eliminar producto por ID
+router.delete('/:productoId', (req, res) => {
+  const productoId = req.params.productoId;
+
+  const query = `DELETE FROM Productos WHERE Producto_ID = ?`;
+
+  db.query(query, [productoId], (err, result) => {
+    if (err) {
+      console.error(err);
+      res.status(500).send('Error al eliminar producto');
+    } else if (result.affectedRows === 0) {
+      res.status(404).send('Producto no encontrado');
+    } else {
+      res.status(200).send('Producto eliminado con éxito');
+    }
+  });
+});
+
 module.exports = router;
